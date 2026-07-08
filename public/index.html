@@ -574,13 +574,39 @@
 
             const w = window.innerWidth;
             const h = window.innerHeight;
+            const cx = w / 2;
+            const cy = h / 2;
+            const size = Math.min(w, h) * 0.36; // Same size as visual center tray
 
-            // Define bottom, left, right static walls (removing top wall to allow spawning from above)
-            const bottom = Bodies.rectangle(w / 2, h + wallThickness / 2, w * 2, wallThickness, { isStatic: true, friction: 0.1 });
-            const left = Bodies.rectangle(-wallThickness / 2, h / 2, wallThickness, h * 2, { isStatic: true, friction: 0.05 });
-            const right = Bodies.rectangle(w + wallThickness / 2, h / 2, wallThickness, h * 2, { isStatic: true, friction: 0.05 });
+            walls = [];
 
-            walls = [bottom, left, right];
+            // Generate circular boundary ring (32 segments) to keep dice inside the circle
+            const segments = 32;
+            const thickness = 60; 
+            const segmentLength = (2 * Math.PI * size / segments) * 1.15; // Overlap slightly to prevent gaps
+
+            for (let i = 0; i < segments; i++) {
+                const angle = (i / segments) * Math.PI * 2;
+                const x = cx + Math.cos(angle) * (size + thickness / 2 - 2); 
+                const y = cy + Math.sin(angle) * (size + thickness / 2 - 2);
+
+                const segment = Bodies.rectangle(x, y, thickness, segmentLength, {
+                    isStatic: true,
+                    angle: angle,
+                    friction: 0.12,
+                    restitution: 0.4
+                });
+                
+                walls.push(segment);
+            }
+
+            // Outer safety boundaries
+            const safetyLeft = Bodies.rectangle(-50, h/2, 100, h*2, { isStatic: true });
+            const safetyRight = Bodies.rectangle(w + 50, h/2, 100, h*2, { isStatic: true });
+            const safetyBottom = Bodies.rectangle(w/2, h + 50, w*2, 100, { isStatic: true });
+            const safetyTop = Bodies.rectangle(w/2, -50, w*2, 100, { isStatic: true });
+            walls.push(safetyLeft, safetyRight, safetyBottom, safetyTop);
+
             Composite.add(world, walls);
         }
 
@@ -597,19 +623,19 @@
         // --- Custom Dice Class ---
         class Dice {
             constructor(x, y, theme) {
-                // 1. Matter.js 2D Rectangular Body
+                // 1. Matter.js 2D Rectangular Body (Tuned for faster stop and circle container)
                 this.body = Bodies.rectangle(x, y, DICE_SIZE, DICE_SIZE, {
-                    restitution: 0.55,  // Good bounciness
-                    friction: 0.08,    // Low friction to allow rolling
-                    frictionAir: 0.015, // Smooth air resistance
+                    restitution: 0.35,  // Softer bounces to prevent escaping
+                    friction: 0.18,    // Moderate friction to assist stopping
+                    frictionAir: 0.048, // High air resistance to stop quicker
                     density: 0.002
                 });
 
                 // Assign random initial velocity & angular velocity (torque)
-                const forceMagnitude = 8;
+                const forceMagnitude = 7.5;
                 Body.setVelocity(this.body, {
-                    x: (Math.random() - 0.5) * forceMagnitude * 2.5,
-                    y: -Math.random() * forceMagnitude
+                    x: (Math.random() - 0.5) * forceMagnitude * 2.2,
+                    y: (Math.random() - 0.5) * forceMagnitude * 2.2 // Disperse omnidirectionally
                 });
                 Body.setAngularVelocity(this.body, (Math.random() - 0.5) * 0.45);
 
@@ -961,7 +987,7 @@
 
         // --- Core Application Logic ---
 
-        // Spawn Dices with user configurations
+        // Spawn Dices with user configurations inside the center tray area
         function spawnDices() {
             // Remove existing dices
             diceList.forEach(dice => dice.destroy());
@@ -973,6 +999,8 @@
 
             const w = window.innerWidth;
             const h = window.innerHeight;
+            const cx = w / 2;
+            const cy = h / 2;
 
             // Collect themes from configuration
             const themes = [];
@@ -982,10 +1010,9 @@
             for (let i = 0; i < diceConfig.white; i++) themes.push('white');
             
             themes.forEach((theme, index) => {
-                // 1. Spawn closer to horizontal center
-                const spawnX = (w / 2) + (Math.random() - 0.5) * 40;
-                // Drop from off-screen top (offset slightly so they don't spawn exactly on top of each other)
-                const spawnY = -DICE_SIZE * (index + 1) - 30; 
+                // Spawn clustered inside the circular tray, offset slightly to prevent explosion
+                const spawnX = cx + (index - (themes.length - 1) / 2) * (DICE_SIZE * 0.4) + (Math.random() - 0.5) * 10;
+                const spawnY = cy - 60 + (Math.random() - 0.5) * 20; 
                 
                 const dice = new Dice(spawnX, spawnY, theme);
                 diceList.push(dice);
@@ -1045,11 +1072,11 @@
             // Apply centripetal gravity towards table center to gather dice in the middle (avoiding UI overlap)
             const cx = canvas.width / 2;
             const cy = canvas.height / 2;
-            // Check if all active dices are virtually stopped
+            // Check if all active dices are virtually stopped (Tuned thresholds for quicker response)
             let allStopped = true;
             diceList.forEach(dice => {
                 const body = dice.body;
-                if (body.speed > 0.08 || body.angularSpeed > 0.015) {
+                if (body.speed > 0.14 || body.angularSpeed > 0.025) {
                     allStopped = false;
                 }
             });
@@ -1068,8 +1095,8 @@
                 }
             }
 
-            // After stopped for 45 frames (~0.75 seconds), start smooth alignment
-            if (stopTimer > 45 && !isAligning) {
+            // After stopped for 20 frames (~0.33 seconds), start smooth alignment
+            if (stopTimer > 20 && !isAligning) {
                 isAligning = true;
                 // Set all bodies to static to prevent collision forces during alignment
                 diceList.forEach(dice => {
@@ -1081,7 +1108,7 @@
             if (isAligning) {
                 // Smoothly slide dices to horizontal aligned layout in the center plate area
                 const total = diceList.length;
-                const spacing = DICE_SIZE * 1.15; // Gap between aligned dice
+                const spacing = DICE_SIZE * 1.42; // Larger gap between aligned dice to prevent overlapping
                 const startX = cx - ((total - 1) * spacing) / 2;
                 
                 diceList.forEach((dice, idx) => {
