@@ -65,14 +65,15 @@
             z-index: 1;
         }
 
-        /* Glassmorphism Control Panel */
+        /* Glassmorphism Control Panel (Aligned to bottom-right) */
         #ui-layer {
             position: absolute;
-            bottom: 40px;
+            bottom: 30px;
+            right: 30px;
             z-index: 10;
             display: flex;
             gap: 15px;
-            pointer-events: none; /* Let clicks pass through to canvas except for interactive elements */
+            pointer-events: none;
         }
 
         .btn {
@@ -622,6 +623,16 @@
                 // Sort faces by depth: draw back faces first (Painter's algorithm)
                 facesToDraw.sort((a, b) => a.depth - b.depth);
 
+                // Find the face that is most facing the screen (largest Z normal component)
+                let maxZNormal = -Infinity;
+                let primaryFaceId = -1;
+                facesToDraw.forEach(f => {
+                    if (f.normal[2] > maxZNormal) {
+                        maxZNormal = f.normal[2];
+                        primaryFaceId = f.id;
+                    }
+                });
+
                 // Directional Lighting source (from top-right-front: [1, -1.2, 1.5])
                 const lightDir = [0.5, -0.6, 0.75];
                 const lightLen = Math.hypot(...lightDir);
@@ -686,6 +697,8 @@
                         y: (transformed[indices[0]].y + transformed[indices[2]].y) / 2
                     };
 
+                    const isPrimaryFace = (faceData.id === primaryFaceId);
+
                     faceDef.pips.forEach(pipOffset => {
                         // Offset in 3D world space
                         const pipCamX = fCenter.x + (camRX[0] * pipOffset[0] + camRY[0] * pipOffset[1]) * DICE_SIZE;
@@ -698,16 +711,28 @@
                         
                         // Shading for pips
                         const pipShade = 0.7 + 0.3 * shade;
-                        ctx.fillStyle = adjustColorBrightness(this.pipColor, pipShade);
+
+                        // Decide Pip color: Vivid for primary face, faded/translucent for side faces
+                        let pipFillColor;
+                        if (isPrimaryFace) {
+                            pipFillColor = adjustColorBrightness(this.pipColor, pipShade);
+                        } else {
+                            if (this.theme === 'white') {
+                                pipFillColor = `rgba(38, 50, 56, 0.15)`; // Faded dark gray
+                            } else {
+                                pipFillColor = `rgba(255, 255, 255, 0.15)`; // Faded white/light gray
+                            }
+                        }
+                        ctx.fillStyle = pipFillColor;
                         ctx.fill();
 
                         // Inner dark ring for white dice to give realistic inset depth
                         if (this.theme === 'white') {
-                            ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+                            ctx.strokeStyle = isPrimaryFace ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.03)';
                             ctx.lineWidth = 1.0;
                             ctx.stroke();
                         } else {
-                            ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+                            ctx.strokeStyle = isPrimaryFace ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.03)';
                             ctx.lineWidth = 0.8;
                             ctx.stroke();
                         }
@@ -810,6 +835,26 @@
 
         // --- Custom Animation & Engine Loop ---
         function loop() {
+            // Apply centripetal gravity towards table center to gather dice in the middle (avoiding UI overlap)
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+            
+            diceList.forEach(dice => {
+                const body = dice.body;
+                const dx = cx - body.position.x;
+                const dy = cy - body.position.y;
+                const dist = Math.hypot(dx, dy);
+                
+                if (dist > 10) {
+                    // Soft gravity pull proportional to distance, capped to avoid excessive speed
+                    const forceMag = Math.min(dist * 0.000004, 0.0012) * body.mass;
+                    Body.applyForce(body, body.position, {
+                        x: (dx / dist) * forceMag,
+                        y: (dy / dist) * forceMag
+                    });
+                }
+            });
+
             // Advance Matter.js physics simulation (Default delta steps is more stable)
             Engine.update(engine);
 
@@ -831,29 +876,48 @@
         function drawTableMarkings() {
             const cx = canvas.width / 2;
             const cy = canvas.height / 2;
+            const size = Math.min(canvas.width, canvas.height) * 0.36;
             
             ctx.save();
+            
+            // Draw a luxurious subtle glassmorphic tray / plate in the center
+            // Plate Shadow
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+            ctx.shadowBlur = 40;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 15;
+            
+            // Plate Outer Border & Body
+            const bowlGrad = ctx.createRadialGradient(cx, cy, 10, cx, cy, size);
+            bowlGrad.addColorStop(0, 'rgba(15, 23, 42, 0.22)');
+            bowlGrad.addColorStop(0.8, 'rgba(15, 23, 42, 0.42)');
+            bowlGrad.addColorStop(1, 'rgba(30, 41, 59, 0.60)');
+            
+            ctx.fillStyle = bowlGrad;
+            ctx.beginPath();
+            ctx.arc(cx, cy, size, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Reset shadows
+            ctx.shadowBlur = 0;
+            ctx.shadowColor = 'transparent';
+            
+            // Plate edge highlight (shiny border)
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
+            ctx.lineWidth = 4;
+            ctx.stroke();
+            
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.02)';
-            ctx.lineWidth = 2;
-
-            // Center large circular border
+            ctx.lineWidth = 1.2;
             ctx.beginPath();
-            ctx.arc(cx, cy, Math.min(canvas.width, canvas.height) * 0.35, 0, Math.PI * 2);
+            ctx.arc(cx, cy, size - 15, 0, Math.PI * 2);
             ctx.stroke();
-
-            // Inner circle
+            
+            // Center ring
             ctx.beginPath();
-            ctx.arc(cx, cy, Math.min(canvas.width, canvas.height) * 0.15, 0, Math.PI * 2);
+            ctx.arc(cx, cy, size * 0.4, 0, Math.PI * 2);
             ctx.stroke();
-
-            // Subtle crosshairs
-            ctx.beginPath();
-            ctx.moveTo(cx - 30, cy);
-            ctx.lineTo(cx + 30, cy);
-            ctx.moveTo(cx, cy - 30);
-            ctx.lineTo(cx, cy + 30);
-            ctx.stroke();
-
+            
             ctx.restore();
         }
 
