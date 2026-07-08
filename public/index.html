@@ -163,11 +163,197 @@
             font-weight: bold;
             color: #38bdf8;
         }
+
+        /* Options Sidebar & Controls Styling */
+        #options-sidebar {
+            position: absolute;
+            top: 0;
+            left: -320px;
+            width: 300px;
+            height: 100%;
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+            z-index: 100;
+            transition: left 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+            padding: 40px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+            color: #ffffff;
+            box-shadow: 10px 0 40px rgba(0, 0, 0, 0.5);
+        }
+
+        #options-sidebar.open {
+            left: 0;
+        }
+
+        #options-toggle-btn {
+            position: absolute;
+            top: 24px;
+            left: 24px;
+            z-index: 101;
+            pointer-events: auto;
+        }
+
+        .options-title {
+            font-size: 1.4rem;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .option-group {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .option-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .color-label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 500;
+            font-size: 0.95rem;
+        }
+
+        .color-dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .counter-control {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 4px 10px;
+        }
+
+        .counter-btn {
+            background: none;
+            border: none;
+            color: #ffffff;
+            width: 24px;
+            height: 24px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.2s;
+            outline: none;
+        }
+
+        .counter-btn:hover {
+            opacity: 0.7;
+        }
+
+        .counter-value {
+            font-size: 1.1rem;
+            font-weight: 600;
+            min-width: 20px;
+            text-align: center;
+        }
     </style>
     <!-- Matter.js 물리 엔진 CDN (with Fallback) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js" onerror="this.onerror=null; this.src='https://unpkg.com/matter-js@0.19.0/build/matter.min.js';"></script>
 </head>
 <body>
+    <div id="app-container">
+        <!-- Options Toggle Button (Top-left) -->
+        <div id="options-toggle-btn">
+            <button id="toggle-sidebar" class="btn" style="padding: 14px; border-radius: 50%;">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Sidebar Panel (Left-side sliding) -->
+        <div id="options-sidebar">
+            <div class="options-title">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
+                주사위 구성 설정
+            </div>
+            
+            <div class="option-group">
+                <div class="option-item">
+                    <div class="color-label">
+                        <div class="color-dot" style="background-color: #d32f2f;"></div>
+                        빨간 주사위
+                    </div>
+                    <div class="counter-control">
+                        <button class="counter-btn" onclick="adjustDiceConfig('red', -1)">-</button>
+                        <div id="count-red" class="counter-value">1</div>
+                        <button class="counter-btn" onclick="adjustDiceConfig('red', 1)">+</button>
+                    </div>
+                </div>
+
+                <div class="option-item">
+                    <div class="color-label">
+                        <div class="color-dot" style="background-color: #ffc107;"></div>
+                        노란 주사위
+                    </div>
+                    <div class="counter-control">
+                        <button class="counter-btn" onclick="adjustDiceConfig('yellow', -1)">-</button>
+                        <div id="count-yellow" class="counter-value">1</div>
+                        <button class="counter-btn" onclick="adjustDiceConfig('yellow', 1)">+</button>
+                    </div>
+                </div>
+
+                <div class="option-item">
+                    <div class="color-label">
+                        <div class="color-dot" style="background-color: #1976d2;"></div>
+                        파란 주사위
+                    </div>
+                    <div class="counter-control">
+                        <button class="counter-btn" onclick="adjustDiceConfig('blue', -1)">-</button>
+                        <div id="count-blue" class="counter-value">1</div>
+                        <button class="counter-btn" onclick="adjustDiceConfig('blue', 1)">+</button>
+                    </div>
+                </div>
+
+                <div class="option-item">
+                    <div class="color-label">
+                        <div class="color-dot" style="background-color: #f5f5f5;"></div>
+                        흰색 주사위
+                    </div>
+                    <div class="counter-control">
+                        <button class="counter-btn" onclick="adjustDiceConfig('white', -1)">-</button>
+                        <div id="count-white" class="counter-value">2</div>
+                        <button class="counter-btn" onclick="adjustDiceConfig('white', 1)">+</button>
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-top: auto;">
+                <button id="apply-options-btn" class="btn" style="width: 100%; justify-content: center; background: rgba(56, 189, 248, 0.2); border-color: rgba(56, 189, 248, 0.4);">
+                    적용 및 재굴림
+                </button>
+            </div>
+        </div>
+
     <div id="app-container">
         <div id="hint-text">주사위를 터치하여 제거하거나 아래 버튼으로 다시 굴리세요</div>
         
@@ -191,6 +377,18 @@
     <script>
         // Matter.js Module aliases
         const { Engine, World, Bodies, Composite, Body, Vector, Query } = Matter;
+
+        // Global Configuration for Dice Spawning
+        let diceConfig = {
+            red: 1,
+            yellow: 1,
+            blue: 1,
+            white: 2
+        };
+
+        // Stopped detection and alignment state
+        let stopTimer = 0;
+        let isAligning = false;
 
         // --- 3D Vector & Matrix Mathematics Helpers ---
         // 3D rotation matrix multiplication and formatting utilities
@@ -763,22 +961,31 @@
 
         // --- Core Application Logic ---
 
-        // Spawn 5 Dices with required colors: 1 Red, 1 Yellow, 1 Blue, 2 White
+        // Spawn Dices with user configurations
         function spawnDices() {
             // Remove existing dices
             diceList.forEach(dice => dice.destroy());
             diceList = [];
+            
+            // Reset state variables
+            stopTimer = 0;
+            isAligning = false;
 
             const w = window.innerWidth;
             const h = window.innerHeight;
 
-            // Generate spawn positions at top with offsets to prevent overlap
-            const themes = ['red', 'yellow', 'blue', 'white', 'white'];
+            // Collect themes from configuration
+            const themes = [];
+            for (let i = 0; i < diceConfig.red; i++) themes.push('red');
+            for (let i = 0; i < diceConfig.yellow; i++) themes.push('yellow');
+            for (let i = 0; i < diceConfig.blue; i++) themes.push('blue');
+            for (let i = 0; i < diceConfig.white; i++) themes.push('white');
             
             themes.forEach((theme, index) => {
-                const spawnX = (w / 2) + (index - 2) * (DICE_SIZE * 1.5) + (Math.random() - 0.5) * 30;
-                // Drop from off-screen top
-                const spawnY = -DICE_SIZE * (index + 1) - 40; 
+                // 1. Spawn closer to horizontal center
+                const spawnX = (w / 2) + (Math.random() - 0.5) * 40;
+                // Drop from off-screen top (offset slightly so they don't spawn exactly on top of each other)
+                const spawnY = -DICE_SIZE * (index + 1) - 30; 
                 
                 const dice = new Dice(spawnX, spawnY, theme);
                 diceList.push(dice);
@@ -837,23 +1044,79 @@
         function loop() {
             // Apply centripetal gravity towards table center to gather dice in the middle (avoiding UI overlap)
             const cx = canvas.width / 2;
-            const cy = canvas.height / 2;
-            
+            // Check if all active dices are virtually stopped
+            let allStopped = true;
             diceList.forEach(dice => {
                 const body = dice.body;
-                const dx = cx - body.position.x;
-                const dy = cy - body.position.y;
-                const dist = Math.hypot(dx, dy);
-                
-                if (dist > 10) {
-                    // Soft gravity pull proportional to distance, capped to avoid excessive speed
-                    const forceMag = Math.min(dist * 0.000004, 0.0012) * body.mass;
-                    Body.applyForce(body, body.position, {
-                        x: (dx / dist) * forceMag,
-                        y: (dy / dist) * forceMag
-                    });
+                if (body.speed > 0.08 || body.angularSpeed > 0.015) {
+                    allStopped = false;
                 }
             });
+
+            // If all are stopped, increment the timer to confirm full stop
+            if (diceList.length > 0 && allStopped) {
+                stopTimer++;
+            } else {
+                stopTimer = 0;
+                // If anything starts moving again, unlock aligning
+                if (isAligning) {
+                    isAligning = false;
+                    diceList.forEach(dice => {
+                        Body.setStatic(dice.body, false);
+                    });
+                }
+            }
+
+            // After stopped for 45 frames (~0.75 seconds), start smooth alignment
+            if (stopTimer > 45 && !isAligning) {
+                isAligning = true;
+                // Set all bodies to static to prevent collision forces during alignment
+                diceList.forEach(dice => {
+                    Body.setStatic(dice.body, true);
+                });
+            }
+
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+
+            if (isAligning) {
+                // Smoothly slide dices to horizontal aligned layout in the center plate area
+                const total = diceList.length;
+                const spacing = DICE_SIZE * 1.15; // Gap between aligned dice
+                const startX = cx - ((total - 1) * spacing) / 2;
+                
+                diceList.forEach((dice, idx) => {
+                    const body = dice.body;
+                    const targetX = startX + idx * spacing;
+                    const targetY = cy;
+                    
+                    // Smoothly Lerp position
+                    const nextX = body.position.x + (targetX - body.position.x) * 0.08;
+                    const nextY = body.position.y + (targetY - body.position.y) * 0.08;
+                    Body.setPosition(body, { x: nextX, y: nextY });
+
+                    // Gently snap local matrix to snap angles too
+                    const snappedMatrix = getClosestAxisMatrix(dice.matrix);
+                    dice.matrix = interpolateRotationMatrix(dice.matrix, snappedMatrix, 0.15);
+                });
+            } else {
+                // Apply centripetal gravity towards table center to gather dice in the middle (avoiding UI overlap)
+                diceList.forEach(dice => {
+                    const body = dice.body;
+                    const dx = cx - body.position.x;
+                    const dy = cy - body.position.y;
+                    const dist = Math.hypot(dx, dy);
+                    
+                    if (dist > 10) {
+                        // Soft gravity pull proportional to distance, capped to avoid excessive speed
+                        const forceMag = Math.min(dist * 0.000004, 0.0012) * body.mass;
+                        Body.applyForce(body, body.position, {
+                            x: (dx / dist) * forceMag,
+                            y: (dy / dist) * forceMag
+                        });
+                    }
+                });
+            }
 
             // Advance Matter.js physics simulation (Default delta steps is more stable)
             Engine.update(engine);
@@ -920,6 +1183,48 @@
             
             ctx.restore();
         }
+
+        // Options sidebar toggle
+        const sidebar = document.getElementById('options-sidebar');
+        const toggleBtn = document.getElementById('toggle-sidebar');
+        
+        toggleBtn.addEventListener('click', (e) => {
+            sidebar.classList.toggle('open');
+            e.stopPropagation(); // Prevent canvas click
+        });
+
+        // Close sidebar when clicking elsewhere
+        window.addEventListener('click', (e) => {
+            if (!sidebar.contains(e.target) && !toggleBtn.contains(e.target)) {
+                sidebar.classList.remove('open');
+            }
+        });
+
+        // Adjust dice config from counter controls
+        function adjustDiceConfig(color, amount) {
+            const currentTotal = diceConfig.red + diceConfig.yellow + diceConfig.blue + diceConfig.white;
+            if (amount > 0 && currentTotal >= 12) {
+                return; // Limit to max 12
+            }
+            if (amount < 0 && diceConfig[color] <= 0) {
+                return;
+            }
+            // Ensure at least 1 dice exists overall
+            if (amount < 0 && currentTotal <= 1 && diceConfig[color] === 1) {
+                return;
+            }
+
+            diceConfig[color] += amount;
+            document.getElementById(`count-${color}`).textContent = diceConfig[color];
+            
+            // Update UI count
+            diceCountEl.textContent = diceConfig.red + diceConfig.yellow + diceConfig.blue + diceConfig.white;
+        }
+
+        document.getElementById('apply-options-btn').addEventListener('click', () => {
+            sidebar.classList.remove('open');
+            spawnDices();
+        });
 
         // Initialize App
         spawnDices();
