@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>3D 입체 주사위 롤러</title>
+    <style>
+        /* Modern Reset & Base Styling */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none; /* Prevent double-tap zoom and scrolling */
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #0b0f19;
+            font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        /* Ambient background texture */
+        #app-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            background: radial-gradient(circle at center, #1e293b 0%, #0f172a 60%, #020617 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+            z-index: 1;
+        }
+
+        /* Glassmorphism Control Panel */
+        #ui-layer {
+            position: absolute;
+            bottom: 40px;
+            z-index: 10;
+            display: flex;
+            gap: 15px;
+            pointer-events: none; /* Let clicks pass through to canvas except for interactive elements */
+        }
+
+        .btn {
+            pointer-events: auto; /* Re-enable clicks for buttons */
+            padding: 16px 36px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            color: #ffffff;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 50px;
+            cursor: pointer;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            outline: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.18);
+            border-color: rgba(255, 255, 255, 0.3);
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.5), 0 0 15px rgba(255, 255, 255, 0.1);
+        }
+
+        .btn:active {
+            transform: translateY(-1px);
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        /* Instruction overlay */
+        #hint-text {
+            position: absolute;
+            top: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 0.95rem;
+            font-weight: 400;
+            letter-spacing: 1px;
+            text-align: center;
+            pointer-events: none;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+            animation: pulse 2s infinite ease-in-out;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 0.8; }
+        }
+
+        /* Score & Dice Count Panel */
+        #info-panel {
+            position: absolute;
+            top: 24px;
+            right: 24px;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 4px;
+            color: #ffffff;
+            pointer-events: none;
+            font-family: monospace;
+            background: rgba(15, 23, 42, 0.6);
+            padding: 10px 16px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(8px);
+        }
+
+        .info-label {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.5);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .info-value {
+            font-size: 1.25rem;
+            font-weight: bold;
+            color: #38bdf8;
+        }
+    </style>
+    <!-- Matter.js 물리 엔진 CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+</head>
+<body>
+    <div id="app-container">
+        <div id="hint-text">주사위를 터치하여 제거하거나 아래 버튼으로 다시 굴리세요</div>
+        
+        <div id="info-panel">
+            <div class="info-label">남은 주사위</div>
+            <div id="dice-count" class="info-value">5</div>
+        </div>
+
+        <canvas id="dice-canvas"></canvas>
+
+        <div id="ui-layer">
+            <button id="reroll-btn" class="btn">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+                </svg>
+                재굴림 (Reroll)
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Matter.js Module aliases
+        const { Engine, World, Bodies, Composite, Body, Vector, Query } = Matter;
+
+        // --- 3D Vector & Matrix Mathematics Helpers ---
+        // 3D rotation matrix multiplication and formatting utilities
+
+        // Create Identity Matrix (3x3 represented as array of 9)
+        function createIdentityMatrix() {
+            return [
+                1, 0, 0,
+                0, 1, 0,
+                0, 0, 1
+            ];
+        }
+
+        // Multiply A * B (3x3 matrices)
+        function multiply3x3(A, B) {
+            const C = new Float32Array(9);
+            for (let i = 0; i < 3; i++) {
+                for (let j = 0; j < 3; j++) {
+                    C[i * 3 + j] = 
+                        A[i * 3 + 0] * B[0 + j] +
+                        A[i * 3 + 1] * B[3 + j] +
+                        A[i * 3 + 2] * B[6 + j];
+                }
+            }
+            return C;
+        }
+
+        // Generate X-axis rotation matrix
+        function rotateXMatrix(rad) {
+            const c = Math.cos(rad);
+            const s = Math.sin(rad);
+            return [
+                1, 0, 0,
+                0, c, -s,
+                0, s, c
+            ];
+        }
+
+        // Generate Y-axis rotation matrix
+        function rotateYMatrix(rad) {
+            const c = Math.cos(rad);
+            const s = Math.sin(rad);
+            return [
+                c, 0, s,
+                0, 1, 0,
+                -s, 0, c
+            ];
+        }
+
+        // Generate Z-axis rotation matrix
+        function rotateZMatrix(rad) {
+            const c = Math.cos(rad);
+            const s = Math.sin(rad);
+            return [
+                c, -s, 0,
+                s, c, 0,
+                0, 0, 1
+            ];
+        }
+
+        // Apply 3x3 matrix to a 3D point [x, y, z]
+        function transformPoint(p, M) {
+            return [
+                M[0]*p[0] + M[1]*p[1] + M[2]*p[2],
+                M[3]*p[0] + M[4]*p[1] + M[5]*p[2],
+                M[6]*p[0] + M[7]*p[1] + M[8]*p[2]
+            ];
+        }
+
+        // Gram-Schmidt Orthonormalization (Keeps rotation matrix orthogonal and prevents scaling drift)
+        function orthonormalizeMatrix(M) {
+            // Extract column vectors
+            let r1 = [M[0], M[3], M[6]];
+            let r2 = [M[1], M[4], M[7]];
+            let r3 = [M[2], M[5], M[8]];
+
+            // Normalize r1
+            let len1 = Math.hypot(r1[0], r1[1], r1[2]);
+            r1 = r1.map(v => v / (len1 || 1));
+
+            // Make r2 orthogonal to r1
+            let dot12 = r1[0]*r2[0] + r1[1]*r2[1] + r1[2]*r2[2];
+            r2 = r2.map((v, i) => v - dot12 * r1[i]);
+            let len2 = Math.hypot(r2[0], r2[1], r2[2]);
+            r2 = r2.map(v => v / (len2 || 1));
+
+            // Cross product r1 x r2 to get r3 (ensures perfect orthogonality)
+            r3[0] = r1[1]*r2[2] - r1[2]*r2[1];
+            r3[1] = r1[2]*r2[0] - r1[0]*r2[2];
+            r3[2] = r1[0]*r2[1] - r1[1]*r2[0];
+
+            return [
+                r1[0], r2[0], r3[0],
+                r1[1], r2[1], r3[1],
+                r1[2], r2[2], r3[2]
+            ];
+        }
+
+        // Find the closest primary axis rotation state (Snap-to-face calculation)
+        function getClosestAxisMatrix(M) {
+            // Find closest coordinate vector for each column
+            let cols = [
+                [M[0], M[3], M[6]],
+                [M[1], M[4], M[7]],
+                [M[2], M[5], M[8]]
+            ];
+
+            // Map each column to the nearest primary unit vector (+-X, +-Y, +-Z)
+            let snappedCols = cols.map(v => {
+                let maxIdx = 0;
+                let maxVal = Math.abs(v[0]);
+                for(let i = 1; i < 3; i++) {
+                    if(Math.abs(v[i]) > maxVal) {
+                        maxVal = Math.abs(v[i]);
+                        maxIdx = i;
+                    }
+                }
+                let snap = [0, 0, 0];
+                snap[maxIdx] = Math.sign(v[maxIdx]);
+                return snap;
+            });
+
+            // Re-orthogonalize to ensure it's a valid rotation matrix (no reflection)
+            let r1 = snappedCols[0];
+            let r2 = snappedCols[1];
+            // Cross product for r3
+            let r3 = [
+                r1[1]*r2[2] - r1[2]*r2[1],
+                r1[2]*r2[0] - r1[0]*r2[2],
+                r1[0]*r2[1] - r1[1]*r2[0]
+            ];
+
+            return [
+                r1[0], r2[0], r3[0],
+                r1[1], r2[1], r3[1],
+                r1[2], r2[2], r3[2]
+            ];
+        }
+
+        // Spherical Linear Interpolation (SLERP) for 3x3 rotation matrices (using Matrix lerp & Orthogonalization)
+        function interpolateRotationMatrix(fromM, toM, t) {
+            let result = [];
+            for (let i = 0; i < 9; i++) {
+                result[i] = fromM[i] + (toM[i] - fromM[i]) * t;
+            }
+            return orthonormalizeMatrix(result);
+        }
+
+
+        // --- Application Setup ---
+        const canvas = document.getElementById('dice-canvas');
+        const ctx = canvas.getContext('2d');
+        const container = document.getElementById('app-container');
+        const diceCountEl = document.getElementById('dice-count');
+
+        // Matter.js Physics setup
+        const engine = Engine.create({
+            gravity: { y: 0.9, x: 0 } // Natural downward gravity
+        });
+        const world = engine.world;
+
+        let walls = [];
+        let diceList = [];
+        const DICE_SIZE = 70; // 2D physics body diameter / size
+        const DICE_RADIUS = DICE_SIZE / 2;
+
+        // Setup boundary walls (Static Bodies)
+        const wallThickness = 100;
+        function updateWalls() {
+            // Remove existing walls
+            if (walls.length > 0) {
+                Composite.remove(world, walls);
+            }
+
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+
+            // Define top, bottom, left, right static walls
+            const bottom = Bodies.rectangle(w / 2, h + wallThickness / 2, w * 2, wallThickness, { isStatic: true, friction: 0.1 });
+            const left = Bodies.rectangle(-wallThickness / 2, h / 2, wallThickness, h * 2, { isStatic: true, friction: 0.05 });
+            const right = Bodies.rectangle(w + wallThickness / 2, h / 2, wallThickness, h * 2, { isStatic: true, friction: 0.05 });
+            const top = Bodies.rectangle(w / 2, -wallThickness / 2, w * 2, wallThickness, { isStatic: true, friction: 0.05 });
+
+            walls = [bottom, left, right, top];
+            Composite.add(world, walls);
+        }
+
+        // Set initial canvas dimension and walls
+        function resizeHandler() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            updateWalls();
+        }
+        window.addEventListener('resize', resizeHandler);
+        resizeHandler(); // Run initial setup
+
+
+        // --- Custom Dice Class ---
+        class Dice {
+            constructor(x, y, theme) {
+                // 1. Matter.js 2D Rectangular Body
+                this.body = Bodies.rectangle(x, y, DICE_SIZE, DICE_SIZE, {
+                    restitution: 0.55,  // Good bounciness
+                    friction: 0.08,    // Low friction to allow rolling
+                    frictionAir: 0.015, // Smooth air resistance
+                    density: 0.002
+                });
+
+                // Assign random initial velocity & angular velocity (torque)
+                const forceMagnitude = 8;
+                Body.setVelocity(this.body, {
+                    x: (Math.random() - 0.5) * forceMagnitude * 2.5,
+                    y: -Math.random() * forceMagnitude
+                });
+                Body.setAngularVelocity(this.body, (Math.random() - 0.5) * 0.45);
+
+                Composite.add(world, this.body);
+
+                // 2. Color Theme Settings
+                this.theme = theme;
+                this.initColors();
+
+                // 3. Virtual 3D Rotation State
+                this.matrix = createIdentityMatrix();
+                
+                // Add initial random 3D rotation to make the spawn look dynamic
+                const rx = rotateXMatrix(Math.random() * Math.PI * 2);
+                const ry = rotateYMatrix(Math.random() * Math.PI * 2);
+                this.matrix = multiply3x3(ry, rx);
+                this.matrix = orthonormalizeMatrix(this.matrix);
+
+                // 4. Local Pip (dots) definition on the 6 faces of a unit cube
+                // Faces: 1: Front (+Z), 6: Back (-Z), 2: Top (+Y), 5: Bottom (-Y), 3: Left (-X), 4: Right (+X)
+                // Pips are normalized coordinates in range [-0.5, 0.5] on the 2D plane of the face
+                this.faces = {
+                    1: { // Front face
+                        normal: [0, 0, 1],
+                        right: [1, 0, 0],
+                        up: [0, -1, 0], // standard canvas y-up is downwards in 3D projection, so up is negative Y
+                        pips: [[0, 0]]
+                    },
+                    6: { // Back face
+                        normal: [0, 0, -1],
+                        right: [-1, 0, 0],
+                        up: [0, -1, 0],
+                        pips: [[-0.25, -0.25], [0.25, -0.25], [-0.25, 0], [0.25, 0], [-0.25, 0.25], [0.25, 0.25]]
+                    },
+                    2: { // Top face
+                        normal: [0, -1, 0],
+                        right: [1, 0, 0],
+                        up: [0, 0, -1],
+                        pips: [[-0.25, -0.25], [0.25, 0.25]]
+                    },
+                    5: { // Bottom face
+                        normal: [0, 1, 0],
+                        right: [1, 0, 0],
+                        up: [0, 0, 1],
+                        pips: [[-0.25, -0.25], [0, 0], [0.25, 0.25]]
+                    },
+                    3: { // Left face
+                        normal: [-1, 0, 0],
+                        right: [0, 0, 1],
+                        up: [0, -1, 0],
+                        pips: [[-0.25, -0.25], [0.25, -0.25], [0.25, 0.25], [-0.25, 0.25]]
+                    },
+                    4: { // Right face
+                        normal: [1, 0, 0],
+                        right: [0, 0, -1],
+                        up: [0, -1, 0],
+                        pips: [[-0.25, -0.25], [0.25, -0.25], [0, 0], [-0.25, 0.25], [0.25, 0.25]]
+                    }
+                };
+
+                // Track the physical rotation of Matter.js to synchronize Z-spin
+                this.lastAngle = this.body.angle;
+            }
+
+            initColors() {
+                switch(this.theme) {
+                    case 'red':
+                        this.baseColor = '#d32f2f';
+                        this.gradStart = '#ef5350';
+                        this.gradEnd = '#b71c1c';
+                        this.pipColor = '#ffffff';
+                        this.borderColor = '#ff8a80';
+                        break;
+                    case 'yellow':
+                        this.baseColor = '#ffc107';
+                        this.gradStart = '#ffe082';
+                        this.gradEnd = '#ff8f00';
+                        this.pipColor = '#212121';
+                        this.borderColor = '#fff59d';
+                        break;
+                    case 'blue':
+                        this.baseColor = '#1976d2';
+                        this.gradStart = '#42a5f5';
+                        this.gradEnd = '#0d47a1';
+                        this.pipColor = '#ffffff';
+                        this.borderColor = '#90caf9';
+                        break;
+                    case 'white':
+                    default:
+                        this.baseColor = '#f5f5f5';
+                        this.gradStart = '#ffffff';
+                        this.gradEnd = '#cfd8dc';
+                        this.pipColor = '#263238';
+                        this.borderColor = '#ffffff';
+                        break;
+                }
+            }
+
+            update() {
+                const vel = this.body.velocity;
+                const speed = this.body.speed;
+                const angVel = this.body.angularVelocity;
+
+                // Sync 2D Matter.js rotation directly with virtual Z-axis rotation
+                const angleDiff = this.body.angle - this.lastAngle;
+                this.lastAngle = this.body.angle;
+
+                if (speed > 0.05 || Math.abs(angVel) > 0.005) {
+                    // 1. Roll 3D model based on 2D velocity vectors
+                    // Moving along X rolls around Y axis, moving along Y rolls around X axis
+                    const rollFactor = 0.026; 
+                    const rotX = -vel.y * rollFactor;
+                    const rotY = vel.x * rollFactor;
+                    const rotZ = angleDiff; // Spin sync
+
+                    // Create rotation matrices
+                    const mx = rotateXMatrix(rotX);
+                    const my = rotateYMatrix(rotY);
+                    const mz = rotateZMatrix(rotZ);
+
+                    // Accumulate rotations
+                    let rotDelta = multiply3x3(my, mx);
+                    rotDelta = multiply3x3(mz, rotDelta);
+                    this.matrix = multiply3x3(rotDelta, this.matrix);
+                    this.matrix = orthonormalizeMatrix(this.matrix);
+                } else {
+                    // 2. Snap to Grid: If the dice has almost stopped, align the closest face to the screen (Z-normal)
+                    const snappedMatrix = getClosestAxisMatrix(this.matrix);
+                    
+                    // Smoothly interpolate (SLERP approximation) to the flat snapped position
+                    this.matrix = interpolateRotationMatrix(this.matrix, snappedMatrix, 0.12);
+                }
+            }
+
+            draw(ctx) {
+                const pos = this.body.position;
+                const halfSize = DICE_RADIUS;
+
+                // 3D Projection configuration (Isometric Tilt Camera)
+                // Pitch: look down from top, Yaw: tilt slightly to the side
+                const pitch = 0.40;
+                const yaw = 0.35;
+                const cameraMat = multiply3x3(rotateXMatrix(pitch), rotateYMatrix(yaw));
+
+                // Vertices of a 3D Cube (centered at origin, side length = DICE_SIZE)
+                const localVertices = [
+                    [-halfSize, -halfSize, -halfSize], // 0
+                    [ halfSize, -halfSize, -halfSize], // 1
+                    [ halfSize,  halfSize, -halfSize], // 2
+                    [-halfSize,  halfSize, -halfSize], // 3
+                    [-halfSize, -halfSize,  halfSize], // 4
+                    [ halfSize, -halfSize,  halfSize], // 5
+                    [ halfSize,  halfSize,  halfSize], // 6
+                    [-halfSize,  halfSize,  halfSize]  // 7
+                ];
+
+                // Compute transformed 3D points
+                const transformed = localVertices.map(v => {
+                    // 1. Rotate by object local matrix
+                    const rot = transformPoint(v, this.matrix);
+                    // 2. Rotate by static camera matrix for 3D perspective
+                    const cam = transformPoint(rot, cameraMat);
+                    // 3. Project to canvas coordinates (Translate to 2D physics body center)
+                    return {
+                        x: pos.x + cam[0],
+                        y: pos.y + cam[1],
+                        z: cam[2] // Depth for Painter's algorithm sorting
+                    };
+                });
+
+                // Render faces definition
+                // Maps vertices to form a polygon. Pips mapped coordinates.
+                const faceDefinitions = [
+                    { id: 1, indices: [4, 5, 6, 7] }, // Front
+                    { id: 6, indices: [1, 0, 3, 2] }, // Back
+                    { id: 2, indices: [0, 1, 5, 4] }, // Top
+                    { id: 5, indices: [7, 6, 2, 3] }, // Bottom
+                    { id: 3, indices: [0, 4, 7, 3] }, // Left
+                    { id: 4, indices: [5, 1, 2, 6] }  // Right
+                ];
+
+                // Calculate visual parameters & depth for each face
+                const facesToDraw = [];
+
+                faceDefinitions.forEach(faceDef => {
+                    const face = this.faces[faceDef.id];
+                    // Rotate the local face normal to global camera space to calculate face visibility
+                    const worldNormal = transformPoint(face.normal, this.matrix);
+                    const camNormal = transformPoint(worldNormal, cameraMat);
+
+                    // If normal Z-coordinate is > 0, it points towards the camera (visible face)
+                    if (camNormal[2] > 0) {
+                        // Calculate center depth of the face
+                        let zSum = 0;
+                        faceDef.indices.forEach(idx => {
+                            zSum += transformed[idx].z;
+                        });
+                        const avgZ = zSum / 4;
+
+                        facesToDraw.push({
+                            id: faceDef.id,
+                            indices: faceDef.indices,
+                            normal: camNormal,
+                            depth: avgZ
+                        });
+                    }
+                });
+
+                // Sort faces by depth: draw back faces first (Painter's algorithm)
+                facesToDraw.sort((a, b) => a.depth - b.depth);
+
+                // Directional Lighting source (from top-right-front: [1, -1.2, 1.5])
+                const lightDir = [0.5, -0.6, 0.75];
+                const lightLen = Math.hypot(...lightDir);
+                const lightNorm = lightDir.map(v => v / lightLen);
+
+                // Draw each visible face
+                facesToDraw.forEach(faceData => {
+                    const indices = faceData.indices;
+                    const normal = faceData.normal;
+
+                    // Draw outer face polygon
+                    ctx.beginPath();
+                    ctx.moveTo(transformed[indices[0]].x, transformed[indices[0]].y);
+                    for(let i = 1; i < 4; i++) {
+                        ctx.lineTo(transformed[indices[i]].x, transformed[indices[i]].y);
+                    }
+                    ctx.closePath();
+
+                    // Calculate Lambertian shading factor based on lighting dot-product
+                    const dot = normal[0]*lightNorm[0] + normal[1]*lightNorm[1] + normal[2]*lightNorm[2];
+                    const shade = Math.max(0, dot);
+                    
+                    // Create linear gradient to give 3D spherical depth shading
+                    const pStart = transformed[indices[0]];
+                    const pEnd = transformed[indices[2]];
+                    const grad = ctx.createLinearGradient(pStart.x, pStart.y, pEnd.x, pEnd.y);
+                    
+                    // Map shading brightness to theme color ranges
+                    const brightnessMultiplier = 0.55 + 0.45 * shade;
+                    const colorStart = adjustColorBrightness(this.gradStart, brightnessMultiplier * 1.15);
+                    const colorEnd = adjustColorBrightness(this.gradEnd, brightnessMultiplier * 0.8);
+
+                    grad.addColorStop(0, colorStart);
+                    grad.addColorStop(1, colorEnd);
+
+                    ctx.fillStyle = grad;
+                    ctx.fill();
+
+                    // Draw Premium Beveled Edges
+                    ctx.lineWidth = 1.8;
+                    ctx.strokeStyle = adjustColorBrightness(this.borderColor, brightnessMultiplier * 1.1);
+                    ctx.stroke();
+
+                    // Subtle inner shading stroke (light source reflection edge)
+                    ctx.lineWidth = 0.6;
+                    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+                    ctx.stroke();
+
+                    // Render Pips (dots) on this face
+                    const faceDef = this.faces[faceData.id];
+                    
+                    // Compute rotated face axes in 3D camera space
+                    const rX = transformPoint(faceDef.right, this.matrix);
+                    const camRX = transformPoint(rX, cameraMat);
+
+                    const rY = transformPoint(faceDef.up, this.matrix);
+                    const camRY = transformPoint(rY, cameraMat);
+
+                    // Base face center position
+                    const fCenter = {
+                        x: (transformed[indices[0]].x + transformed[indices[2]].x) / 2,
+                        y: (transformed[indices[0]].y + transformed[indices[2]].y) / 2
+                    };
+
+                    faceDef.pips.forEach(pipOffset => {
+                        // Offset in 3D world space
+                        const pipCamX = fCenter.x + (camRX[0] * pipOffset[0] + camRY[0] * pipOffset[1]) * DICE_SIZE;
+                        const pipCamY = fCenter.y + (camRX[1] * pipOffset[0] + camRY[1] * pipOffset[1]) * DICE_SIZE;
+
+                        // Draw Pip with drop shadow
+                        ctx.beginPath();
+                        const pipRadius = DICE_SIZE * 0.095;
+                        ctx.arc(pipCamX, pipCamY, pipRadius, 0, Math.PI * 2);
+                        
+                        // Shading for pips
+                        const pipShade = 0.7 + 0.3 * shade;
+                        ctx.fillStyle = adjustColorBrightness(this.pipColor, pipShade);
+                        ctx.fill();
+
+                        // Inner dark ring for white dice to give realistic inset depth
+                        if (this.theme === 'white') {
+                            ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+                            ctx.lineWidth = 1.0;
+                            ctx.stroke();
+                        } else {
+                            ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+                            ctx.lineWidth = 0.8;
+                            ctx.stroke();
+                        }
+                    });
+                });
+            }
+
+            // Clean physics body when removed
+            destroy() {
+                Composite.remove(world, this.body);
+            }
+        }
+
+        // Helper function to dynamically adjust hex color brightness for lighting simulation
+        function adjustColorBrightness(hex, percent) {
+            // Default fallback if color parsing fails
+            if (hex.charAt(0) !== '#') return hex;
+            
+            let num = parseInt(hex.slice(1), 16),
+                amt = Math.round(2.55 * (percent - 1) * 100),
+                R = (num >> 16) + amt,
+                G = (num >> 8 & 0x00FF) + amt,
+                B = (num & 0x0000FF) + amt;
+
+            return "#" + (0x1000000 + (R<255?R<0?0:R:255)*0x10000 + (G<255?G<0?0:G:255)*0x100 + (B<255?B<0?0:B:255)).toString(16).slice(1);
+        }
+
+
+        // --- Core Application Logic ---
+
+        // Spawn 5 Dices with required colors: 1 Red, 1 Yellow, 1 Blue, 2 White
+        function spawnDices() {
+            // Remove existing dices
+            diceList.forEach(dice => dice.destroy());
+            diceList = [];
+
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+
+            // Generate spawn positions at top with offsets to prevent overlap
+            const themes = ['red', 'yellow', 'blue', 'white', 'white'];
+            
+            themes.forEach((theme, index) => {
+                const spawnX = (w / 2) + (index - 2) * (DICE_SIZE * 1.5) + (Math.random() - 0.5) * 30;
+                // Drop from off-screen top
+                const spawnY = -DICE_SIZE * (index + 1) - 40; 
+                
+                const dice = new Dice(spawnX, spawnY, theme);
+                diceList.push(dice);
+            });
+
+            updateUI();
+        }
+
+        function updateUI() {
+            diceCountEl.textContent = diceList.length;
+        }
+
+        // Tap/Click to remove active dice
+        function handleInteraction(clientX, clientY) {
+            const clickPoint = { x: clientX, y: clientY };
+            
+            // Get list of Matter.js bodies at the cursor position
+            const bodies = diceList.map(d => d.body);
+            const clickedBodies = Query.point(bodies, clickPoint);
+
+            if (clickedBodies.length > 0) {
+                // Find matching dice object
+                const clickedBody = clickedBodies[0];
+                const index = diceList.findIndex(d => d.body === clickedBody);
+                
+                if (index !== -1) {
+                    // Dynamic pop-away animation could be added, but immediate deletion is requested
+                    const targetDice = diceList[index];
+                    targetDice.destroy();
+                    diceList.splice(index, 1);
+                    updateUI();
+
+                    // Gentle screen shake or feedback could be here
+                }
+            }
+        }
+
+        // Setup Reroll button action
+        document.getElementById('reroll-btn').addEventListener('click', () => {
+            spawnDices();
+        });
+
+        // Setup mouse & touch event listeners for dice destruction
+        canvas.addEventListener('mousedown', (e) => {
+            handleInteraction(e.clientX, e.clientY);
+        });
+
+        canvas.addEventListener('touchstart', (e) => {
+            if (e.touches.length > 0) {
+                handleInteraction(e.touches[0].clientX, e.touches[0].clientY);
+            }
+        }, { passive: true });
+
+
+        // --- Custom Animation & Engine Loop ---
+        function loop() {
+            // Advance Matter.js physics simulation
+            Engine.update(engine, 1000 / 60);
+
+            // Clear Screen
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw ambient table markings (Sleek minimalist circles for premium aesthetic)
+            drawTableMarkings();
+
+            // Update and Draw Dices
+            diceList.forEach(dice => {
+                dice.update();
+                dice.draw(ctx);
+            });
+
+            requestAnimationFrame(loop);
+        }
+
+        function drawTableMarkings() {
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+            
+            ctx.save();
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.02)';
+            ctx.lineWidth = 2;
+
+            // Center large circular border
+            ctx.beginPath();
+            ctx.arc(cx, cy, Math.min(canvas.width, canvas.height) * 0.35, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Inner circle
+            ctx.beginPath();
+            ctx.arc(cx, cy, Math.min(canvas.width, canvas.height) * 0.15, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Subtle crosshairs
+            ctx.beginPath();
+            ctx.moveTo(cx - 30, cy);
+            ctx.lineTo(cx + 30, cy);
+            ctx.moveTo(cx, cy - 30);
+            ctx.lineTo(cx, cy + 30);
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        // Initialize App
+        spawnDices();
+        requestAnimationFrame(loop);
+
+    </script>
+</body>
+</html>
