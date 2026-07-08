@@ -345,6 +345,30 @@
                         <button class="counter-btn" onclick="adjustDiceConfig('white', 1)">+</button>
                     </div>
                 </div>
+
+                <div class="option-item">
+                    <div class="color-label">
+                        <div class="color-dot" style="background-color: #212121; border-color: rgba(255,255,255,0.3);"></div>
+                        검은 주사위
+                    </div>
+                    <div class="counter-control">
+                        <button class="counter-btn" onclick="adjustDiceConfig('black', -1)">-</button>
+                        <div id="count-black" class="counter-value">0</div>
+                        <button class="counter-btn" onclick="adjustDiceConfig('black', 1)">+</button>
+                    </div>
+                </div>
+
+                <div class="option-item">
+                    <div class="color-label">
+                        <div class="color-dot" style="background-color: #2e7d32;"></div>
+                        초록 주사위
+                    </div>
+                    <div class="counter-control">
+                        <button class="counter-btn" onclick="adjustDiceConfig('green', -1)">-</button>
+                        <div id="count-green" class="counter-value">0</div>
+                        <button class="counter-btn" onclick="adjustDiceConfig('green', 1)">+</button>
+                    </div>
+                </div>
             </div>
 
             <div style="margin-top: auto;">
@@ -383,7 +407,9 @@
             red: 1,
             yellow: 1,
             blue: 1,
-            white: 2
+            white: 2,
+            black: 0,
+            green: 0
         };
 
         // Stopped detection and alignment state
@@ -553,9 +579,9 @@
         const container = document.getElementById('app-container');
         const diceCountEl = document.getElementById('dice-count');
 
-        // Matter.js Physics setup
+        // Matter.js Physics setup (Top-down view has no global downward gravity)
         const engine = Engine.create({
-            gravity: { y: 0.9, x: 0 } // Natural downward gravity
+            gravity: { y: 0, x: 0 } 
         });
         const world = engine.world;
 
@@ -724,6 +750,26 @@
                         this.borderColor = '#90caf9';
                         break;
                     case 'white':
+                        this.baseColor = '#f5f5f5';
+                        this.gradStart = '#ffffff';
+                        this.gradEnd = '#cfd8dc';
+                        this.pipColor = '#263238';
+                        this.borderColor = '#ffffff';
+                        break;
+                    case 'black':
+                        this.baseColor = '#212121';
+                        this.gradStart = '#424242';
+                        this.gradEnd = '#111111';
+                        this.pipColor = '#ffffff';
+                        this.borderColor = '#616161';
+                        break;
+                    case 'green':
+                        this.baseColor = '#2e7d32';
+                        this.gradStart = '#4caf50';
+                        this.gradEnd = '#1b5e20';
+                        this.pipColor = '#ffffff';
+                        this.borderColor = '#81c784';
+                        break;
                     default:
                         this.baseColor = '#f5f5f5';
                         this.gradStart = '#ffffff';
@@ -1008,6 +1054,8 @@
             for (let i = 0; i < diceConfig.yellow; i++) themes.push('yellow');
             for (let i = 0; i < diceConfig.blue; i++) themes.push('blue');
             for (let i = 0; i < diceConfig.white; i++) themes.push('white');
+            for (let i = 0; i < diceConfig.black; i++) themes.push('black');
+            for (let i = 0; i < diceConfig.green; i++) themes.push('green');
             
             themes.forEach((theme, index) => {
                 // Spawn clustered inside the circular tray, offset slightly to prevent explosion
@@ -1228,7 +1276,7 @@
 
         // Adjust dice config from counter controls
         function adjustDiceConfig(color, amount) {
-            const currentTotal = diceConfig.red + diceConfig.yellow + diceConfig.blue + diceConfig.white;
+            const currentTotal = diceConfig.red + diceConfig.yellow + diceConfig.blue + diceConfig.white + diceConfig.black + diceConfig.green;
             if (amount > 0 && currentTotal >= 12) {
                 return; // Limit to max 12
             }
@@ -1244,7 +1292,7 @@
             document.getElementById(`count-${color}`).textContent = diceConfig[color];
             
             // Update UI count
-            diceCountEl.textContent = diceConfig.red + diceConfig.yellow + diceConfig.blue + diceConfig.white;
+            diceCountEl.textContent = diceConfig.red + diceConfig.yellow + diceConfig.blue + diceConfig.white + diceConfig.black + diceConfig.green;
         }
 
         document.getElementById('apply-options-btn').addEventListener('click', () => {
