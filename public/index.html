@@ -509,6 +509,7 @@
         }
 
         // Find the closest primary axis rotation state (Snap-to-face calculation)
+        // Keeps the primary front-facing direction (r3, column 3) locked to prevent number change!
         function getClosestAxisMatrix(M) {
             const axes = [
                 [1, 0, 0], [-1, 0, 0],
@@ -516,25 +517,25 @@
                 [0, 0, 1], [0, 0, -1]
             ];
             
-            // 1. Find closest axis for column 1 (r1)
-            let r1 = [M[0], M[3], M[6]];
-            let bestR1 = [1, 0, 0];
+            // 1. Find closest axis for column 3 (r3 - the front normal vector determining the value)
+            let r3 = [M[2], M[5], M[8]];
+            let bestR3 = [0, 0, 1];
             let maxDot = -Infinity;
             for (let axis of axes) {
-                let dot = r1[0]*axis[0] + r1[1]*axis[1] + r1[2]*axis[2];
+                let dot = r3[0]*axis[0] + r3[1]*axis[1] + r3[2]*axis[2];
                 if (dot > maxDot) {
                     maxDot = dot;
-                    bestR1 = axis;
+                    bestR3 = axis;
                 }
             }
             
-            // 2. Find closest axis for column 2 (r2) that is perpendicular to bestR1
+            // 2. Find closest axis for column 2 (r2) that is perpendicular to bestR3
             let r2 = [M[1], M[4], M[7]];
             let bestR2 = [0, 1, 0];
             maxDot = -Infinity;
             for (let axis of axes) {
-                // Must be perpendicular to bestR1
-                let perpDot = bestR1[0]*axis[0] + bestR1[1]*axis[1] + bestR1[2]*axis[2];
+                // Must be perpendicular to bestR3
+                let perpDot = bestR3[0]*axis[0] + bestR3[1]*axis[1] + bestR3[2]*axis[2];
                 if (Math.abs(perpDot) > 0.01) continue; // Not perpendicular
                 
                 let dot = r2[0]*axis[0] + r2[1]*axis[1] + r2[2]*axis[2];
@@ -544,11 +545,11 @@
                 }
             }
             
-            // 3. Compute r3 = r1 x r2
-            let bestR3 = [
-                bestR1[1]*bestR2[2] - bestR1[2]*bestR2[1],
-                bestR1[2]*bestR2[0] - bestR1[0]*bestR2[2],
-                bestR1[0]*bestR2[1] - bestR1[1]*bestR2[0]
+            // 3. Compute r1 = r2 x r3 to guarantee right-handed coordinate system
+            let bestR1 = [
+                bestR2[1]*bestR3[2] - bestR2[2]*bestR3[1],
+                bestR2[2]*bestR3[0] - bestR2[0]*bestR3[2],
+                bestR2[0]*bestR3[1] - bestR2[1]*bestR3[0]
             ];
             
             return [
