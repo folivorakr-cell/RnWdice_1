@@ -380,11 +380,6 @@
 
     <div id="app-container">
         <div id="hint-text">주사위를 터치하여 제거하거나 아래 버튼으로 다시 굴리세요</div>
-        
-        <div id="info-panel">
-            <div class="info-label">남은 주사위</div>
-            <div id="dice-count" class="info-value">5</div>
-        </div>
 
         <canvas id="dice-canvas"></canvas>
 
@@ -577,7 +572,6 @@
         const canvas = document.getElementById('dice-canvas');
         const ctx = canvas.getContext('2d');
         const container = document.getElementById('app-container');
-        const diceCountEl = document.getElementById('dice-count');
 
         // Matter.js Physics setup (Top-down view has no global downward gravity)
         const engine = Engine.create({
@@ -649,21 +643,21 @@
         // --- Custom Dice Class ---
         class Dice {
             constructor(x, y, theme) {
-                // 1. Matter.js 2D Rectangular Body (Tuned for faster stop and circle container)
+                // 1. Matter.js 2D Rectangular Body (Tuned for energetic bounciness and longer roll)
                 this.body = Bodies.rectangle(x, y, DICE_SIZE, DICE_SIZE, {
-                    restitution: 0.35,  // Softer bounces to prevent escaping
-                    friction: 0.18,    // Moderate friction to assist stopping
-                    frictionAir: 0.048, // High air resistance to stop quicker
+                    restitution: 0.68,  // Highly bouncy to bounce off circular walls
+                    friction: 0.12,    // Low friction to roll smoothly
+                    frictionAir: 0.024, // Low air resistance to roll all over the tray
                     density: 0.002
                 });
 
                 // Assign random initial velocity & angular velocity (torque)
-                const forceMagnitude = 7.5;
+                const forceMagnitude = 11.0;
                 Body.setVelocity(this.body, {
                     x: (Math.random() - 0.5) * forceMagnitude * 2.2,
-                    y: (Math.random() - 0.5) * forceMagnitude * 2.2 // Disperse omnidirectionally
+                    y: (Math.random() - 0.5) * forceMagnitude * 2.2 // Disperse omnidirectionally with high force
                 });
-                Body.setAngularVelocity(this.body, (Math.random() - 0.5) * 0.45);
+                Body.setAngularVelocity(this.body, (Math.random() - 0.5) * 0.55);
 
                 Composite.add(world, this.body);
 
@@ -1065,12 +1059,6 @@
                 const dice = new Dice(spawnX, spawnY, theme);
                 diceList.push(dice);
             });
-
-            updateUI();
-        }
-
-        function updateUI() {
-            diceCountEl.textContent = diceList.length;
         }
 
         // Tap/Click to remove active dice
@@ -1091,7 +1079,6 @@
                     const targetDice = diceList[index];
                     targetDice.destroy();
                     diceList.splice(index, 1);
-                    updateUI();
 
                     // Gentle screen shake or feedback could be here
                 }
@@ -1290,9 +1277,6 @@
 
             diceConfig[color] += amount;
             document.getElementById(`count-${color}`).textContent = diceConfig[color];
-            
-            // Update UI count
-            diceCountEl.textContent = diceConfig.red + diceConfig.yellow + diceConfig.blue + diceConfig.white + diceConfig.black + diceConfig.green;
         }
 
         document.getElementById('apply-options-btn').addEventListener('click', () => {
