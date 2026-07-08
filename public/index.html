@@ -3,7 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D 입체 주사위 롤러</title>
+    <title>주사위 굴리기</title>
+    <script>
+        // On-screen console error capture to diagnose tablet rendering bugs
+        window.addEventListener('error', function(e) {
+            const errorDiv = document.createElement('div');
+            errorDiv.style.position = 'absolute';
+            errorDiv.style.top = '10px';
+            errorDiv.style.left = '10px';
+            errorDiv.style.background = 'rgba(239, 68, 68, 0.95)';
+            errorDiv.style.color = 'white';
+            errorDiv.style.padding = '14px 20px';
+            errorDiv.style.borderRadius = '8px';
+            errorDiv.style.zIndex = '99999';
+            errorDiv.style.fontSize = '13px';
+            errorDiv.style.fontFamily = 'monospace';
+            errorDiv.style.maxWidth = '90vw';
+            errorDiv.style.wordBreak = 'break-all';
+            errorDiv.style.boxShadow = '0 10px 25px rgba(0,0,0,0.5)';
+            errorDiv.textContent = 'Runtime Error: ' + e.message + ' at ' + e.filename + ':' + e.lineno;
+            document.body.appendChild(errorDiv);
+        });
+    </script>
     <style>
         /* Modern Reset & Base Styling */
         * {
@@ -142,8 +163,8 @@
             color: #38bdf8;
         }
     </style>
-    <!-- Matter.js 물리 엔진 CDN -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <!-- Matter.js 물리 엔진 CDN (with Fallback) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js" onerror="this.onerror=null; this.src='https://unpkg.com/matter-js@0.19.0/build/matter.min.js';"></script>
 </head>
 <body>
     <div id="app-container">
@@ -790,8 +811,8 @@
 
         // --- Custom Animation & Engine Loop ---
         function loop() {
-            // Advance Matter.js physics simulation
-            Engine.update(engine, 1000 / 60);
+            // Advance Matter.js physics simulation (Default delta steps is more stable)
+            Engine.update(engine);
 
             // Clear Screen
             ctx.clearRect(0, 0, canvas.width, canvas.height);
